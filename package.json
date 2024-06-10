@@ -1,17 +1,16 @@
 {
-  "name": "nodebb-plugin-quickstart",
-  "version": "0.4.3",
-  "description": "A starter kit for quickly creating NodeBB plugins",
+  "name": "nodebb-plugin-post-gallery",
+  "version": "1.0.0",
+  "description": "A plugin that creates a page for uploaded images from posts",
   "main": "library.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nodebb/nodebb-plugin-quickstart"
+    "url": "https://github.com/nodebb/nodebb-plugin-post-gallery"
   },
   "keywords": [
     "nodebb",
     "plugin",
-    "quickstart",
-    "shell"
+    "gallery"
   ],
   "husky": {
     "hooks": {
@@ -27,7 +26,7 @@
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/nodebb/nodebb-plugin-quickstart/issues"
+    "url": "https://github.com/nodebb/nodebb-plugin-post-gallery/issues"
   },
   "readmeFilename": "README.md",
   "nbbpm": {

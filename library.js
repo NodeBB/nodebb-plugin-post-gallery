@@ -1,88 +1,74 @@
 'use strict';
 
-const nconf = require.main.require('nconf');
-const winston = require.main.require('winston');
+const path = require('path');
+const validator = require.main.require('validator');
 
-const meta = require.main.require('./src/meta');
-
-const controllers = require('./lib/controllers');
-
+const db = require.main.require('./src/database');
+const posts = require.main.require('./src/posts');
 const routeHelpers = require.main.require('./src/routes/helpers');
 
-const plugin = {};
+const plugin = module.exports;
 
 plugin.init = async (params) => {
-	const { router /* , middleware , controllers */ } = params;
+	const { router } = params;
 
-	// Settings saved in the plugin settings can be retrieved via settings methods
-	const { setting1, setting2 } = await meta.settings.get('quickstart');
-	if (setting1) {
-		console.log(setting2);
-	}
+	routeHelpers.setupPageRoute(router, '/post-gallery', async (req, res, next) => {
+		let src = '';
+		let uploads = [];
+		let currentPid;
+		let prevPid;
+		let nextPid;
+		if (req.query.pid) {
+			currentPid = validator.escape(String(req.query.pid));
+			const score = await db.sortedSetScore('nbb-post-gallery:pids', currentPid);
+			if (!score) {
+				return next();
+			}
 
-	/**
-	 * We create two routes for every view. One API call, and the actual route itself.
-	 * Use the `setupPageRoute` helper and NodeBB will take care of everything for you.
-	 *
-	 * Other helpers include `setupAdminPageRoute` and `setupAPIRoute`
-	 * */
-	routeHelpers.setupPageRoute(router, '/quickstart', [(req, res, next) => {
-		winston.info(`[plugins/quickstart] In middleware. This argument can be either a single middleware or an array of middlewares`);
-		setImmediate(next);
-	}], (req, res) => {
-		winston.info(`[plugins/quickstart] Navigated to ${nconf.get('relative_path')}/quickstart`);
-		res.render('quickstart', { uid: req.uid });
-	});
+			const [prevs, nexts] = await Promise.all([
+				db.getSortedSetRevRangeByScore('nbb-post-gallery:pids', 0, 1, score - 1, '-inf'), // max, min
+				db.getSortedSetRangeByScore('nbb-post-gallery:pids', 0, 1, score + 1, '+inf'), // min, max
+			]);
 
-	routeHelpers.setupAdminPageRoute(router, '/admin/plugins/quickstart', controllers.renderAdminPage);
-};
+			prevPid = prevs.length ? prevs[0] : null;
+			nextPid = nexts.length ? nexts[0] : null;
+		} else {
+			const pids = await db.getSortedSetRevRange('nbb-post-gallery:pids', 0, 1);
+			currentPid = pids[0];
+			prevPid = pids[1];
+		}
 
-/**
- * If you wish to add routes to NodeBB's RESTful API, listen to the `static:api.routes` hook.
- * Define your routes similarly to above, and allow core to handle the response via the
- * built-in helpers.formatApiResponse() method.
- *
- * In this example route, the `ensureLoggedIn` middleware is added, which means a valid login
- * session or bearer token (which you can create via ACP > Settings > API Access) needs to be
- * passed in.
- *
- * To call this example route:
- *   curl -X GET \
- * 		http://example.org/api/v3/plugins/quickstart/test \
- * 		-H "Authorization: Bearer some_valid_bearer_token"
- *
- * Will yield the following response JSON:
- * 	{
- *		"status": {
- *			"code": "ok",
- *			"message": "OK"
- *		},
- *		"response": {
- *			"foobar": "test"
- *		}
- *	}
- */
-plugin.addRoutes = async ({ router, middleware, helpers }) => {
-	const middlewares = [
-		middleware.ensureLoggedIn,			// use this if you want only registered users to call this route
-		// middleware.admin.checkPrivileges,	// use this to restrict the route to administrators
-	];
+		if (currentPid) {
+			uploads = await posts.uploads.list(currentPid);
 
-	routeHelpers.setupApiRoute(router, 'get', '/quickstart/:param1', middlewares, (req, res) => {
-		helpers.formatApiResponse(200, res, {
-			foobar: req.params.param1,
+			uploads = uploads.map((upload, i) => {
+				return {
+					url: path.join('/assets/uploads', upload),
+					selected: i == 0,
+				}
+			});
+			if (uploads.length) {
+				src = uploads[0].url;
+			}
+		}
+
+		res.render('post-gallery', {
+			title: 'Post Gallery',
+			currentPid,
+			prevPid,
+			nextPid,
+			src,
+			uploads,
 		});
 	});
 };
 
-plugin.addAdminNavigation = (header) => {
-	header.plugins.push({
-		route: '/plugins/quickstart',
-		icon: 'fa-tint',
-		name: 'Quickstart',
-	});
-
-	return header;
+plugin.onPostSave = async (hookData) => {
+	const { pid, timestamp } = hookData.post;
+	const uploads = await posts.uploads.list(pid);
+	const extensions = ['.jpg', '.jpeg', '.png', '.bmp'];
+	const images = uploads.filter(u => u && extensions.some(ext => u.endsWith(ext)));
+	if (images.length) {
+		await db.sortedSetAdd(`nbb-post-gallery:pids`, timestamp, pid);
+	}
 };
-
-module.exports = plugin;
