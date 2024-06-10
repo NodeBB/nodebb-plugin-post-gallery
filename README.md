@@ -9,4 +9,4 @@ This plugin creates a new route at /post-gallery that shows images from posts up
 
 ## Screenshots
 
-...
+![](./screenshots/screenshot.png)
