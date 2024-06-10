@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const nconf = require.main.require('nconf');
 const validator = require.main.require('validator');
 
 const db = require.main.require('./src/database');
@@ -13,6 +14,7 @@ plugin.init = async (params) => {
 	const { router } = params;
 
 	routeHelpers.setupPageRoute(router, '/post-gallery', async (req, res, next) => {
+		const uploadUrl = nconf.get('upload_url');
 		let src = '';
 		let uploads = [];
 		let currentPid;
@@ -43,7 +45,7 @@ plugin.init = async (params) => {
 
 			uploads = uploads.map((upload, i) => {
 				return {
-					url: path.join('/assets/uploads', upload),
+					url: path.join(uploadUrl, upload),
 					selected: i == 0,
 				}
 			});
