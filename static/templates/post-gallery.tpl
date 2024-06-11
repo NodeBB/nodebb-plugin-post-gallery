@@ -5,7 +5,6 @@
 				component="post-gallery/current" src="{src}" style="max-height: 50vh; max-width:100%;" />
 		</div>
 		{{{ if (uploads.length != "1") }}}
-		<hr/>
 		<div class="d-flex justify-content-center mb-3 gap-3">
 		{{{ each uploads }}}
 			<div>
@@ -15,7 +14,7 @@
 		</div>
 		{{{ end }}}
 	</div>
-
+	<hr/>
 	<div class="d-flex gap-2 justify-content-evenly">
 		<a href="{{{ if prevPid }}}{config.relative_path}/post-gallery?pid={prevPid}{{{ else }}}#{{{ end }}}" class="btn btn-sm btn-light {{{ if !prevPid }}}disabled{{{ end }}}"><i class="fa fa-chevron-left"></i> Previous Post</a>
 
