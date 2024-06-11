@@ -16,7 +16,7 @@
 		{{{ end }}}
 	</div>
 
-	<div class="d-flex gap-2 justify-content-between">
+	<div class="d-flex gap-2 justify-content-evenly">
 		<a href="{{{ if prevPid }}}{config.relative_path}/post-gallery?pid={prevPid}{{{ else }}}#{{{ end }}}" class="btn btn-sm btn-light {{{ if !prevPid }}}disabled{{{ end }}}"><i class="fa fa-chevron-left"></i> Previous Post</a>
 
 		<a href="{config.relative_path}/post/{currentPid}" class="btn btn-sm btn-light">View Post</a>
