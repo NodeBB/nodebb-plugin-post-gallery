@@ -1,6 +1,6 @@
 {
   "name": "nodebb-plugin-post-gallery",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A plugin that creates a page for uploaded images from posts",
   "main": "library.js",
   "repository": {
