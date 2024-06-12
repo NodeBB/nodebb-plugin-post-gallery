@@ -4,7 +4,10 @@
 	"library": "./library.js",
 	"hooks": [
 		{ "hook": "static:app.load", "method": "init" },
-		{ "hook": "action:post.save", "method": "onPostSave" }
+		{ "hook": "action:post.save", "method": "onPostSave" },
+		{ "hook": "action:post.restore", "method": "onPostRestore" },
+		{ "hook": "action:post.delete", "method": "onPostDelete" },
+		{ "hook": "action:posts.purge", "method": "onPostsPurge" }
 	],
 	"modules": {
 		"../client/post-gallery.js": "./static/lib/post-gallery.js"

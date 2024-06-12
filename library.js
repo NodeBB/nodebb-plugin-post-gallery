@@ -10,6 +10,8 @@ const routeHelpers = require.main.require('./src/routes/helpers');
 
 const plugin = module.exports;
 
+const pidsKey = 'nbb-post-gallery:pids';
+
 plugin.init = async (params) => {
 	const { router } = params;
 
@@ -22,20 +24,20 @@ plugin.init = async (params) => {
 		let nextPid;
 		if (req.query.pid) {
 			currentPid = validator.escape(String(req.query.pid));
-			const score = await db.sortedSetScore('nbb-post-gallery:pids', currentPid);
+			const score = await db.sortedSetScore(pidsKey, currentPid);
 			if (!score) {
 				return next();
 			}
 
 			const [prevs, nexts] = await Promise.all([
-				db.getSortedSetRevRangeByScore('nbb-post-gallery:pids', 0, 1, score - 1, '-inf'), // max, min
-				db.getSortedSetRangeByScore('nbb-post-gallery:pids', 0, 1, score + 1, '+inf'), // min, max
+				db.getSortedSetRevRangeByScore(pidsKey, 0, 1, score - 1, '-inf'), // max, min
+				db.getSortedSetRangeByScore(pidsKey, 0, 1, score + 1, '+inf'), // min, max
 			]);
 
 			prevPid = prevs.length ? prevs[0] : null;
 			nextPid = nexts.length ? nexts[0] : null;
 		} else {
-			const pids = await db.getSortedSetRevRange('nbb-post-gallery:pids', 0, 1);
+			const pids = await db.getSortedSetRevRange(pidsKey, 0, 1);
 			currentPid = pids[0];
 			prevPid = pids[1];
 		}
@@ -71,6 +73,25 @@ plugin.onPostSave = async (hookData) => {
 	const extensions = ['.jpg', '.jpeg', '.png', '.bmp'];
 	const images = uploads.filter(u => u && extensions.some(ext => u.endsWith(ext)));
 	if (images.length) {
-		await db.sortedSetAdd(`nbb-post-gallery:pids`, timestamp, pid);
+		await db.sortedSetAdd(pidsKey, timestamp, pid);
+	}
+};
+
+plugin.onPostRestore = async (hookData) => {
+	// will readd to zadd if post has uploads
+	await plugin.onPostSave(hookData);
+};
+
+plugin.onPostDelete = async (hookData) => {
+	const { post } = hookData;
+	if (post && post.pid) {
+		await db.sortedSetRemove(pidsKey, post.pid);
+	}
+};
+
+plugin.onPostsPurge = async (hookData) => {
+	const { posts } = hookData;
+	if (Array.isArray(posts) && posts.length) {
+		await db.sortedSetRemove(pidsKey, posts.map(p => p && p.pid));
 	}
 };
