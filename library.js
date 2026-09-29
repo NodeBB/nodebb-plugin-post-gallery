@@ -1,12 +1,12 @@
 'use strict';
 
 const path = require('path');
-const nconf = require.main.require('nconf');
-const validator = require.main.require('validator');
+const nconf = nodebb.require('nconf');
 
-const db = require.main.require('./src/database');
-const posts = require.main.require('./src/posts');
-const routeHelpers = require.main.require('./src/routes/helpers');
+const db = nodebb.require('./src/database');
+const posts = nodebb.require('./src/posts');
+const routeHelpers = nodebb.require('./src/routes/helpers');
+const privileges = nodebb.require('./src/privileges');
 
 const plugin = module.exports;
 
@@ -20,37 +20,30 @@ plugin.init = async (params) => {
 		let src = '';
 		let uploads = [];
 		let currentPid;
-		let prevPid;
-		let nextPid;
 		if (req.query.pid) {
-			currentPid = validator.escape(String(req.query.pid));
-			const score = await db.sortedSetScore(pidsKey, currentPid);
-			if (!score) {
+			currentPid = String(req.query.pid);
+			if (!(await privileges.posts.can('topics:read', currentPid, req.uid))) {
 				return next();
 			}
-
-			const [prevs, nexts] = await Promise.all([
-				db.getSortedSetRevRangeByScore(pidsKey, 0, 1, score - 1, '-inf'), // max, min
-				db.getSortedSetRangeByScore(pidsKey, 0, 1, score + 1, '+inf'), // min, max
-			]);
-
-			prevPid = prevs.length ? prevs[0] : null;
-			nextPid = nexts.length ? nexts[0] : null;
 		} else {
-			const pids = await db.getSortedSetRevRange(pidsKey, 0, 1);
-			currentPid = pids[0];
-			prevPid = pids[1];
+			currentPid = await getReadablePids(req.uid,
+				(offset, pageSize) => db.getSortedSetRevRange(pidsKey, offset, offset + pageSize - 1)
+			);
 		}
+
+		const score = await db.sortedSetScore(pidsKey, currentPid);
+		if (!score) {
+			return next();
+		}
+
+		const [prevPid, nextPid] = await Promise.all([
+			getPrevPid(req.uid, score),
+			req.query.pid ? getNextPid(req.uid, score) : null,
+		]);
 
 		if (currentPid) {
 			uploads = await posts.uploads.list(currentPid);
-
-			uploads = uploads.map((upload, i) => {
-				return {
-					url: path.join(uploadUrl, upload),
-					selected: i == 0,
-				}
-			});
+			uploads = uploads.map((upload, i) => ({ url: path.join(uploadUrl, upload), selected: i == 0 }));
 			if (uploads.length) {
 				src = uploads[0].url;
 			}
@@ -66,6 +59,35 @@ plugin.init = async (params) => {
 		});
 	});
 };
+
+async function getReadablePids(uid, dbMethod) {
+	let foundPid;
+	let offset = 0;
+	const pageSize = 20;
+	while (!foundPid) {
+		const pids = await dbMethod(offset, pageSize);
+		if (!pids.length) break;
+		const readablePids = await privileges.posts.filter('topics:read', pids, uid);
+		if (readablePids.length) {
+			foundPid = readablePids[0];
+			break;
+		}
+		offset += pageSize;
+	}
+	return foundPid;
+}
+
+async function getPrevPid(uid, score) {
+	return await getReadablePids(uid,
+		(offset, pageSize) => db.getSortedSetRevRangeByScore(pidsKey, offset, pageSize, score - 1, '-inf')
+	);
+}
+
+async function getNextPid(uid, score) {
+	return await getReadablePids(uid,
+		(offset, pageSize) => db.getSortedSetRangeByScore(pidsKey, offset, pageSize, score + 1, '+inf')
+	);
+}
 
 plugin.onPostSave = async (hookData) => {
 	const { pid, timestamp } = hookData.post;
